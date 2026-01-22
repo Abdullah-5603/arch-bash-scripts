@@ -25,21 +25,15 @@ print_status() {
 print_status "Removing existing desktop environments..."
 
 # Remove known desktop environments and compositors safely
-packages=$(pacman -Qq | grep -E "plasma|kde|xfce|lxde|lxqt|mate|cinnamon|i3|budgie|awesome|deepin|gnome|hyprland|sway")
-if [[ -n "$packages" ]]; then
-    sudo pacman -Rns $packages --noconfirm || true
-fi
+sudo pacman -Rns --needed $(pacman -Qq | grep -E "plasma|kde|xfce|lxde|lxqt|mate|cinnamon|i3|budgie|awesome|deepin|gnome|hyprland|sway") --noconfirm || true
 
 # Remove Xorg packages safely
-xorg_packages=$(pacman -Qq | grep -E "^xorg")
-if [[ -n "$xorg_packages" ]]; then
-    sudo pacman -Rns $xorg_packages --noconfirm || true
-fi
+sudo pacman -Rns --needed xorg* --noconfirm || true
 
 # Clean orphaned packages safely
 orphans=$(pacman -Qdtq)
 if [[ -n "$orphans" ]]; then
-    sudo pacman -Rns $orphans --noconfirm || true
+    sudo pacman -Rns --needed $orphans --noconfirm || true
 fi
 
 # Update system
