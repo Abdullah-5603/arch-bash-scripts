@@ -24,7 +24,7 @@ print_status() {
 #---------------------------------------------
 print_status "Removing existing desktop environments..."
 
-sudo pacman -Rns $(pacman -Qq | grep -E "plasma|kde|xfce|lxde|lxqt|mate|cinnamon|i3|budgie|awesome|deepin|gnome") --noconfirm || true
+sudo pacman -Rns $(pacman -Qq | grep -E "plasma|kde|xfce|lxde|lxqt|mate|cinnamon|i3|budgie|awesome|deepin|gnome|hyprland|sway") --noconfirm || true
 sudo pacman -Rns xorg* --noconfirm || true
 
 # Clean unused packages
