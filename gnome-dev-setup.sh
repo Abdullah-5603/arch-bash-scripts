@@ -42,7 +42,6 @@ sudo pacman -S --noconfirm \
     firefox \
     git \
     vim \
-    neofetch \
     htop \
     wget \
     curl \
