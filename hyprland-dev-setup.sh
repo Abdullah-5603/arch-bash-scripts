@@ -1,185 +1,116 @@
 #!/bin/bash
-# --------------------------------------------------
-# COMPLETE Hyprland Polyglot Dev Setup
-# WordPress • Laravel • PHP • JS • C/C++ • Python
-# OS: Arch Linux
-# --------------------------------------------------
+# Full Arch Dev + Hyprland Setup Script for HP Victus
+# Run as root or sudo
 
-set -e
+# --- VARIABLES ---
+read -p "Enter your Linux username: " USER
+HOME_DIR="/home/$USER"
 
-echo "=============================="
-echo "0. Base directories..."
-mkdir -p \
-  ~/Pictures \
-  ~/Projects \
-  ~/.config/hypr \
-  ~/.config/hyprpaper \
-  ~/.config/fish
+# --- STEP 1: Update System ---
+pacman -Syu --noconfirm
 
-echo "=============================="
-echo "1. Hyprland configuration..."
-cat > ~/.config/hypr/hyprland.conf << 'EOF'
-monitor=*,preferred,auto
-terminal=foot
+# --- STEP 2: Essential Packages ---
+pacman -S --noconfirm base-devel git sudo wget curl unzip htop neofetch networkmanager \
+vim nano tmux zsh
 
-exec-once=hyprpaper &
-exec-once=wofi --show drun &
-exec-once=mako &
-exec-once=discord &
+# Enable NetworkManager
+systemctl enable NetworkManager
+systemctl start NetworkManager
 
-workspace=1:Code
-workspace=2:Browser
-workspace=3:Database
-workspace=4:Chat
-workspace=5:Media
+# --- STEP 3: Install Hyprland & Wayland Utilities ---
+pacman -S --noconfirm hyprland swaybg swaylock wayland wayland-protocols xdg-desktop-portal xdg-desktop-portal-hyprland alacritty mako swayidle grim slurp wl-clipboard \
+waybar qt5-wayland qt6-wayland qt5ct qt6ct noto-fonts ttf-jetbrains-mono ttf-ubuntu-font-family
 
-bind=SUPER+ENTER,exec,foot
-bind=SUPER+SHIFT+ENTER,exec,foot -e bash
-bind=SUPER+SHIFT+V,exec,code
-bind=SUPER+B,exec,firefox
-bind=SUPER+SHIFT+M,exec,phpstorm
-bind=SUPER+SHIFT+Q,close
-bind=SUPER+SHIFT+R,restart
+# --- STEP 4: Enable SDDM + Themes ---
+echo "Select SDDM Theme:"
+echo "1) Layan"
+echo "2) Sweet"
+echo "3) Nordic"
+read -p "Enter number [1-3]: (default: 1)" THEME_CHOICE
 
-bind=SUPER+H,moveleft
-bind=SUPER+L,moveright
-bind=SUPER+J,movedown
-bind=SUPER+K,moveup
+case $THEME_CHOICE in
+  1) THEME_NAME="layan" && git clone https://github.com/tildearrow/layan-sddm.git /usr/share/sddm/themes/layan ;;
+  2) THEME_NAME="sweet" && git clone https://github.com/sddm/sddm-theme-sweet.git /usr/share/sddm/themes/sweet ;;
+  3) THEME_NAME="nordic" && git clone https://github.com/kalvn/Nordic-SDDM.git /usr/share/sddm/themes/nordic ;;
+  *) echo "Invalid choice, defaulting to Layan" && THEME_NAME="layan" ;;
+esac
 
-bind=SUPER+1,workspace,1
-bind=SUPER+2,workspace,2
-bind=SUPER+3,workspace,3
-bind=SUPER+4,workspace,4
-bind=SUPER+5,workspace,5
+sed -i "s/^Current=.*/Current=$THEME_NAME/" /etc/sddm.conf
 
-bind=SUPER+SHIFT+1,movetoworkspace,1
-bind=SUPER+SHIFT+2,movetoworkspace,2
-bind=SUPER+SHIFT+3,movetoworkspace,3
-bind=SUPER+SHIFT+4,movetoworkspace,4
-bind=SUPER+SHIFT+5,movetoworkspace,5
+# # Download a stunning SDDM theme (example: sweet theme)
+# git clone https://github.com/sddm/sddm-theme-breeze.git /usr/share/sddm/themes/breeze
+# sed -i 's/^Current=.*/Current=breeze/' /etc/sddm.conf
 
-bind=PRINT,exec,grim -g "$(slurp)" ~/Pictures/screenshot_$(date +%F_%T).png
+# # --- STEP 5: Setup Hyprland configs ---
+# mkdir -p $HOME_DIR/.config/hypr
+# cat <<EOF > $HOME_DIR/.config/hypr/hyprland.conf
+# # Basic Hyprland config with multiple workspaces
+# general {
+#     mod=SUPER
+# }
+
+# monitor=1,1920x1080@60,0,0,1
+
+# workspace=1,Terminal
+# workspace=2,Web
+# workspace=3,Code
+# workspace=4,Media
+# workspace=5,Docs
+
+# bind=SUPER+Return,exec,alacritty
+# bind=SUPER+d,exec,dmenu_run
+# bind=SUPER+q,close
+# EOF
+
+# Set ownership
+chown -R $USER:$USER $HOME_DIR/.config/hypr
+
+# --- STEP 6: Programming Languages ---
+pacman -S --noconfirm nodejs npm python python-pip php composer go gcc clang make
+
+# --- STEP 7: Editors & IDE ---
+pacman -S --noconfirm code code-server vim neovim
+
+# --- STEP 8: Web Development Tools ---
+pacman -S --noconfirm wp-cli
+# Laravel Herd (requires PHP + Composer)
+sudo -u $USER composer global require tightenco/laravel-herd
+
+# --- STEP 9: Docker & Docker Compose ---
+pacman -S --noconfirm docker docker-compose
+systemctl enable docker
+systemctl start docker
+usermod -aG docker $USER
+
+# --- STEP 10: Additional eye-catchy visual tweaks ---
+# Alacritty config
+mkdir -p $HOME_DIR/.config/alacritty
+cat <<EOF > $HOME_DIR/.config/alacritty/alacritty.yml
+colors:
+  primary:
+    background: '0x1e1e2e'
+    foreground: '0xf5f5f5'
+font:
+  normal:
+    family: "JetBrains Mono"
+    size: 13.0
 EOF
 
-echo "=============================="
-echo "2. Core system + dev packages..."
-sudo pacman -Syu --needed --noconfirm \
-  base-devel git curl wget unzip \
-  foot wofi mako grim slurp hyprpaper \
-  firefox code discord \
-  docker docker-compose \
-  fish zsh starship \
-  gcc clang make cmake gdb lldb \
-  python python-pip python-virtualenv pipx \
-  mariadb
+# Waybar theme
+mkdir -p $HOME_DIR/.config/waybar
+cat <<EOF > $HOME_DIR/.config/waybar/style.css
+* {
+    font-family: "JetBrains Mono";
+    font-size: 12px;
+    color: #f5f5f5;
+}
+#clock {
+    color: #ff79c6;
+}
+EOF
 
-echo "=============================="
-echo "3. PHP + extensions (WordPress / Laravel)..."
-sudo pacman -S --needed --noconfirm \
-  php php-fpm composer \
-  php-gd php-intl php-pgsql php-sqlite \
-  php-mysql php-curl php-zip php-mbstring
+chown -R $USER:$USER $HOME_DIR/.config/waybar
+chown -R $USER:$USER $HOME_DIR/.config/alacritty
 
-sudo systemctl enable --now php-fpm
-
-echo "=============================="
-echo "4. Node.js LTS + npm..."
-sudo pacman -S --needed --noconfirm nodejs-lts-iron npm
-
-echo "=============================="
-echo "5. pnpm + yarn (Corepack)..."
-sudo corepack enable
-corepack prepare pnpm@latest --activate
-corepack prepare yarn@stable --activate
-
-echo "=============================="
-echo "6. Bun runtime..."
-curl -fsSL https://bun.sh/install | bash
-echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.bashrc
-
-echo "=============================="
-echo "7. Docker enable..."
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-
-echo "=============================="
-echo "8. MongoDB (Docker)..."
-docker volume create mongodb_data || true
-docker run -d \
-  --name mongodb \
-  -p 27017:27017 \
-  -v mongodb_data:/data/db \
-  --restart unless-stopped \
-  mongo:7 || true
-
-echo "=============================="
-echo "9. yay (AUR helper)..."
-if ! command -v yay &>/dev/null; then
-  cd /tmp
-  git clone https://aur.archlinux.org/yay.git
-  cd yay
-  makepkg -si --noconfirm
-fi
-
-echo "=============================="
-echo "10. MongoDB Compass..."
-yay -S --noconfirm mongodb-compass
-
-echo "=============================="
-echo "11. MariaDB initialization..."
-sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
-sudo systemctl enable --now mariadb
-
-echo "=============================="
-echo "12. Python tooling..."
-pipx ensurepath
-pipx install black || true
-pipx install flake8 || true
-pipx install pytest || true
-
-echo "=============================="
-echo "13. WP-CLI..."
-curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
-chmod +x wp-cli.phar
-sudo mv wp-cli.phar /usr/local/bin/wp
-
-echo "=============================="
-echo "14. Laravel Sail..."
-composer global require laravel/sail
-echo 'export PATH="$HOME/.config/composer/vendor/bin:$PATH"' >> ~/.bashrc
-
-echo "=============================="
-echo "15. Shells + Starship..."
-chsh -s /bin/zsh
-chsh -s /bin/fish
-
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
-echo 'eval "$(starship init zsh)"' >> ~/.zshrc
-echo 'starship init fish | source' >> ~/.config/fish/config.fish
-
-echo "=============================="
-echo "16. Verification..."
-php -v
-composer --version
-node -v
-npm -v
-pnpm -v
-yarn -v
-bun -v
-gcc --version
-python --version
-docker --version
-wp --info
-
-echo "=============================="
-echo "✅ COMPLETE DEV ENVIRONMENT READY"
-echo ""
-echo "Stacks installed:"
-echo "• PHP: php | php-fpm | composer | Laravel | WordPress"
-echo "• JS: node | npm | pnpm | yarn | bun"
-echo "• DB: MariaDB | MongoDB | Compass"
-echo "• C/C++: gcc | clang | cmake | gdb"
-echo "• Python: python | pip | venv | pipx"
-echo "• Tools: Docker | VS Code | Hyprland"
-echo ""
-echo "⚠️ REBOOT REQUIRED (docker group + shells)"
+# --- STEP 11: Finish ---
+echo "Setup complete! Reboot to start Hyprland with SDDM login."

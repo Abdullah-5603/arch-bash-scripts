@@ -125,7 +125,7 @@ output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
 exec_always dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
 exec waybar
 
-bindsym $mod+Return exec alacritty
+bindsym $mod+Enter exec alacritty
 bindsym $mod+d exec rofi -show drun
 bindsym $mod+e exec nautilus
 bindsym $mod+b exec firefox
@@ -183,7 +183,7 @@ EOF
 cp ~/.config/gtk-3.0/settings.ini ~/.config/gtk-4.0/settings.ini
 
 # --------------------------------------------------
-# Login Manager: greetd (no regreet)
+# Login Manager: greetd
 # --------------------------------------------------
 echo "==> Installing greetd login manager"
 sudo pacman -S --noconfirm greetd
