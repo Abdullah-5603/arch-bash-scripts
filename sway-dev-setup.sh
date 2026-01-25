@@ -38,7 +38,7 @@ sudo pacman -S --noconfirm \
   ttf-jetbrains-mono \
   noto-fonts noto-fonts-emoji \
   papirus-icon-theme 
-  
+
 # --------------------------------------------------
 # Core dev toolchain
 # --------------------------------------------------
@@ -183,12 +183,12 @@ EOF
 cp ~/.config/gtk-3.0/settings.ini ~/.config/gtk-4.0/settings.ini
 
 # --------------------------------------------------
-# Login Manager: greetd + regreet (Themed)
+# Login Manager: greetd (no regreet)
 # --------------------------------------------------
 echo "==> Installing greetd login manager"
-sudo pacman -S --noconfirm greetd regreet
+sudo pacman -S --noconfirm greetd
 
-echo "==> Configuring greetd"
+echo "==> Configuring greetd to launch Sway"
 sudo mkdir -p /etc/greetd
 
 sudo tee /etc/greetd/config.toml >/dev/null <<EOF
@@ -196,25 +196,12 @@ sudo tee /etc/greetd/config.toml >/dev/null <<EOF
 vt = 1
 
 [default_session]
-command = "regreet"
-user = "greeter"
+command = "sway"
+user = "$USER_NAME"
 EOF
 
 echo "==> Enabling greetd"
 sudo systemctl enable greetd
-
-# --------------------------------------------------
-# regreet theme (matches desktop)
-# --------------------------------------------------
-echo "==> Configuring regreet theme"
-mkdir -p ~/.config/regreet
-
-cat > ~/.config/regreet/regreet.toml <<'EOF'
-[appearance]
-theme = "Arc-Dark"
-icon_theme = "Papirus-Dark"
-font = "JetBrains Mono 11"
-EOF
 
 # --------------------------------------------------
 # ZSH
