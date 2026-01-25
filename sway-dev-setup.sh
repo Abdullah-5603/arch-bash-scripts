@@ -37,9 +37,8 @@ echo "==> Installing fonts and themes"
 sudo pacman -S --noconfirm \
   ttf-jetbrains-mono \
   noto-fonts noto-fonts-emoji \
-  papirus-icon-theme \
-  arc-gtk-theme gtk-engine-murrine
-
+  papirus-icon-theme 
+  
 # --------------------------------------------------
 # Core dev toolchain
 # --------------------------------------------------
