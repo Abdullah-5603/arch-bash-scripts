@@ -37,8 +37,7 @@ echo "==> Installing fonts and themes"
 sudo pacman -S --noconfirm \
   ttf-jetbrains-mono \
   noto-fonts noto-fonts-emoji \
-  papirus-icon-theme \
-  arc-gtk-theme gtk-engine-murrine
+  papirus-icon-theme 
 
 # --------------------------------------------------
 # Core dev toolchain
@@ -126,7 +125,7 @@ output * bg /usr/share/backgrounds/sway/Sway_Wallpaper_Blue_1920x1080.png fill
 exec_always dbus-update-activation-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP=sway
 exec waybar
 
-bindsym $mod+Return exec alacritty
+bindsym $mod+Enter exec alacritty
 bindsym $mod+d exec rofi -show drun
 bindsym $mod+e exec nautilus
 bindsym $mod+b exec firefox
@@ -184,12 +183,12 @@ EOF
 cp ~/.config/gtk-3.0/settings.ini ~/.config/gtk-4.0/settings.ini
 
 # --------------------------------------------------
-# Login Manager: greetd + regreet (Themed)
+# Login Manager: greetd
 # --------------------------------------------------
 echo "==> Installing greetd login manager"
-sudo pacman -S --noconfirm greetd regreet
+sudo pacman -S --noconfirm greetd
 
-echo "==> Configuring greetd"
+echo "==> Configuring greetd to launch Sway"
 sudo mkdir -p /etc/greetd
 
 sudo tee /etc/greetd/config.toml >/dev/null <<EOF
@@ -197,25 +196,12 @@ sudo tee /etc/greetd/config.toml >/dev/null <<EOF
 vt = 1
 
 [default_session]
-command = "regreet"
-user = "greeter"
+command = "sway"
+user = "$USER_NAME"
 EOF
 
 echo "==> Enabling greetd"
 sudo systemctl enable greetd
-
-# --------------------------------------------------
-# regreet theme (matches desktop)
-# --------------------------------------------------
-echo "==> Configuring regreet theme"
-mkdir -p ~/.config/regreet
-
-cat > ~/.config/regreet/regreet.toml <<'EOF'
-[appearance]
-theme = "Arc-Dark"
-icon_theme = "Papirus-Dark"
-font = "JetBrains Mono 11"
-EOF
 
 # --------------------------------------------------
 # ZSH
