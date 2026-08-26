@@ -1,6 +1,32 @@
 #!/usr/bin/env bash
-
-# Configure OpenBangla Keyboard's Fcitx5 engine on Omarchy/Hyprland.
+#
+# Configure OpenBangla Keyboard's Fcitx5 engine for Bangla (Avro Phonetic)
+# input, on any Linux distribution and desktop environment/window manager.
+#
+# - Arch Linux with Omarchy + yay: uses the prebuilt AUR package (fast path,
+#   fully tested).
+# - Everything else (Debian/Ubuntu, Fedora/RHEL, openSUSE, Alpine, or plain
+#   Arch without yay/Omarchy): builds OpenBangla's Fcitx5 engine from source
+#   the same way the AUR package does (git clone, cargo build for the Riti
+#   engine, cmake for the rest). This path needs network access and a C++/
+#   Rust toolchain.
+#
+# Non-Arch package names below are a best-effort mapping across distro
+# families -- if a specific one has changed on your distro/version, package
+# installs are attempted one at a time with a warning (not a hard failure),
+# and the actual build step further down will fail with a concrete, fixable
+# error (e.g. a missing header) if something important is really absent.
+#
+# Also distro/DE-generic:
+# - Fcitx5 autostart uses a plain XDG ~/.config/autostart/*.desktop entry
+#   (works under systemd's xdg-desktop-autostart integration, GNOME, KDE,
+#   XFCE, and most session managers) instead of an Omarchy-specific unit.
+# - The global CTRL+SPACE toggle is wired up automatically only on
+#   Omarchy/Hyprland; everywhere else this script prints the command
+#   (`fcitx5-remote -t`) and example steps to bind it yourself.
+# - Login environment variables go through systemd's environment.d when
+#   systemd is present, and through ~/.profile / ~/.xprofile otherwise.
+#
 # Run as the desktop user (not root): ./openbangla-fcitx5-setup.sh
 
 set -Eeuo pipefail
@@ -8,22 +34,117 @@ set -Eeuo pipefail
 readonly SCRIPT_NAME="${0##*/}"
 readonly TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 readonly BACKUP_ROOT="${XDG_STATE_HOME:-$HOME/.local/state}/openbangla-fcitx5/backups/$TIMESTAMP"
-readonly MANAGED_BEGIN="-- BEGIN openbangla-fcitx5 (managed by $SCRIPT_NAME)"
-readonly MANAGED_END="-- END openbangla-fcitx5 (managed by $SCRIPT_NAME)"
+readonly MANAGED_BEGIN_LUA="-- BEGIN openbangla-fcitx5 (managed by $SCRIPT_NAME)"
+readonly MANAGED_END_LUA="-- END openbangla-fcitx5 (managed by $SCRIPT_NAME)"
+readonly MANAGED_BEGIN_SH="# BEGIN openbangla-fcitx5 (managed by $SCRIPT_NAME)"
+readonly MANAGED_END_SH="# END openbangla-fcitx5 (managed by $SCRIPT_NAME)"
 
 log() { printf '\n==> %s\n' "$*"; }
+warn() { printf 'WARNING: %s\n' "$*" >&2; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
-command -v pacman >/dev/null || die "This script requires Arch Linux/pacman."
-command -v omarchy >/dev/null || die "This script requires Omarchy."
-command -v fcitx5 >/dev/null || die "Fcitx5 is not installed. Update Omarchy first."
-command -v gdbus >/dev/null || die "gdbus (glib2) is required to configure the Fcitx5 input method group."
 (( EUID != 0 )) || die "Run this as the logged-in desktop user, not as root."
-# The AUR build below ends with `sudo pacman -U`, which needs to prompt for
-# your password on a real TTY. Without one, sudo times out mid-build and this
-# script dies right after the AUR step, leaving the input-method config below
-# it (profile, F12 binding, environment) never written.
-[[ -t 0 && -t 1 ]] || die "Run this in an interactive terminal, not through a non-interactive/piped shell (sudo needs a TTY for the AUR package build)."
+# The install/build steps below prompt for a privileged-escalation password
+# and (on non-Arch distros) may run a real compile; both need a real TTY.
+[[ -t 0 && -t 1 ]] || die "Run this in an interactive terminal, not through a non-interactive/piped shell."
+
+for tool in git gdbus; do
+  command -v "$tool" >/dev/null || die "This script requires '$tool'."
+done
+
+SUDO=""
+if command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+elif command -v doas >/dev/null 2>&1; then
+  SUDO="doas"
+else
+  die "This script requires 'sudo' or 'doas' for privileged operations."
+fi
+
+### Package manager detection ###############################################
+
+detect_pkg_manager() {
+  if command -v pacman >/dev/null 2>&1; then printf 'pacman'
+  elif command -v apt-get >/dev/null 2>&1; then printf 'apt'
+  elif command -v dnf >/dev/null 2>&1; then printf 'dnf'
+  elif command -v zypper >/dev/null 2>&1; then printf 'zypper'
+  elif command -v apk >/dev/null 2>&1; then printf 'apk'
+  else printf 'unknown'
+  fi
+}
+readonly PKG_MANAGER="$(detect_pkg_manager)"
+[[ "$PKG_MANAGER" != "unknown" ]] || die "No supported package manager found (looked for pacman, apt, dnf, zypper, apk)."
+
+pkg_install() {
+  local pkg
+  for pkg in "$@"; do
+    case "$PKG_MANAGER" in
+      pacman) $SUDO pacman -S --needed --noconfirm "$pkg" ;;
+      apt)    $SUDO apt-get install -y "$pkg" ;;
+      dnf)    $SUDO dnf install -y "$pkg" ;;
+      zypper) $SUDO zypper --non-interactive install "$pkg" ;;
+      apk)    $SUDO apk add "$pkg" ;;
+    esac || warn "Could not install '$pkg' -- the package name may differ on your distro/version. If this package matters, install its equivalent yourself and re-run."
+  done
+}
+
+pkg_is_installed() {
+  case "$PKG_MANAGER" in
+    pacman) pacman -Q "$1" >/dev/null 2>&1 ;;
+    apt)    dpkg -s "$1" >/dev/null 2>&1 ;;
+    dnf)    rpm -q "$1" >/dev/null 2>&1 ;;
+    zypper) rpm -q "$1" >/dev/null 2>&1 ;;
+    apk)    apk info -e "$1" >/dev/null 2>&1 ;;
+  esac
+}
+
+pkg_remove() {
+  local pkg
+  for pkg in "$@"; do
+    pkg_is_installed "$pkg" || continue
+    case "$PKG_MANAGER" in
+      pacman) $SUDO pacman -Rns --noconfirm "$pkg" ;;
+      apt)    $SUDO apt-get remove -y "$pkg" ;;
+      dnf)    $SUDO dnf remove -y "$pkg" ;;
+      zypper) $SUDO zypper --non-interactive remove "$pkg" ;;
+      apk)    $SUDO apk del "$pkg" ;;
+    esac || warn "Could not remove '$pkg'."
+  done
+}
+
+### Best-effort per-distro package name tables ##############################
+
+# Runtime Fcitx5 stack: core + Qt/GTK frontends + config GUI + a Bangla-
+# capable font.
+declare -A FCITX5_RUNTIME_PKGS=(
+  [pacman]="fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool noto-fonts"
+  [apt]="fcitx5 fcitx5-frontend-gtk3 fcitx5-frontend-qt5 fcitx5-config-qt fonts-noto-core"
+  [dnf]="fcitx5 fcitx5-gtk3 fcitx5-qt fcitx5-configtool google-noto-sans-bengali-fonts"
+  [zypper]="fcitx5 fcitx5-gtk3 fcitx5-qt5 fcitx5-configtool noto-sans-bengali-fonts"
+  [apk]="fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool font-noto"
+)
+
+# Build dependencies to compile OpenBangla's Fcitx5 engine from source (only
+# used outside the Arch/AUR fast path): a C++ toolchain, CMake, Rust/Cargo
+# (for the Riti engine), Qt5 dev headers, and Fcitx5 dev headers.
+declare -A OPENBANGLA_BUILD_DEP_PKGS=(
+  [pacman]="cmake rust cargo extra-cmake-modules qt5-base base-devel"
+  [apt]="cmake rustc cargo extra-cmake-modules qtbase5-dev build-essential pkg-config libfcitx5core-dev libfcitx5config-dev libfcitx5utils-dev"
+  [dnf]="cmake rust cargo extra-cmake-modules qt5-qtbase-devel gcc-c++ make fcitx5-devel"
+  [zypper]="cmake rust cargo extra-cmake-modules libqt5-qtbase-devel gcc-c++ make fcitx5-devel"
+  [apk]="cmake rust cargo extra-cmake-modules qt5-qtbase-dev build-base fcitx5-dev"
+)
+
+# IBus/OpenBangla packages that would conflict with this setup, if present.
+declare -A CONFLICTING_PKGS=(
+  [pacman]="ibus ibus-avro ibus-avro-git ibus-openbangla ibus-openbangla-git openbangla-keyboard openbangla-keyboard-bin openbangla-keyboard-git fcitx5-openbangla-git"
+  [apt]="ibus ibus-avro openbangla-keyboard"
+  [dnf]="ibus ibus-avro openbangla-keyboard"
+  [zypper]="ibus ibus-avro openbangla-keyboard"
+  [apk]="ibus openbangla-keyboard"
+)
+
+### Generic file helpers #####################################################
 
 backup_file() {
   local source="$1" relative destination
@@ -83,11 +204,13 @@ set_ini_key() {
   rm -f -- "$temporary"
 }
 
-remove_managed_lua_block() {
-  local file="$1" temporary
+# Removes a previously-appended managed block (idempotent re-runs), for
+# either Lua ("-- BEGIN/END ...") or shell ("# BEGIN/END ...") comment style.
+remove_managed_block() {
+  local file="$1" begin="$2" end="$3" temporary
   [[ -f "$file" ]] || return 0
   temporary="$(mktemp)"
-  awk -v begin="$MANAGED_BEGIN" -v end="$MANAGED_END" '
+  awk -v begin="$begin" -v end="$end" '
     $0 == begin { managed=1; next }
     $0 == end { managed=0; next }
     !managed { print }
@@ -98,12 +221,21 @@ remove_managed_lua_block() {
 
 audit() {
   log "Pre-change audit"
-  printf 'Omarchy: '; omarchy version 2>&1 || true
+  if [[ -r /etc/os-release ]]; then
+    printf 'Distro: '; ( . /etc/os-release && printf '%s\n' "${PRETTY_NAME:-unknown}" )
+  fi
+  printf 'Package manager: %s\n' "$PKG_MANAGER"
+  if command -v omarchy >/dev/null 2>&1; then printf 'Omarchy: '; omarchy version 2>&1 || true; fi
   printf 'Kernel: '; uname -r
   printf 'Session: %s / %s\n' "${XDG_CURRENT_DESKTOP:-unknown}" "${XDG_SESSION_TYPE:-unknown}"
 
   printf '\nInstalled input-method packages:\n'
-  pacman -Q 2>/dev/null | awk 'BEGIN{IGNORECASE=1} $1 ~ /^(fcitx|ibus|openbangla|avro)/ {print}' || true
+  case "$PKG_MANAGER" in
+    pacman) pacman -Q 2>/dev/null | awk 'BEGIN{IGNORECASE=1} $1 ~ /^(fcitx|ibus|openbangla|avro)/ {print}' ;;
+    apt)    dpkg -l 2>/dev/null | awk 'BEGIN{IGNORECASE=1} $2 ~ /^(fcitx|ibus|openbangla|avro)/ {print $2, $3}' ;;
+    dnf|zypper) rpm -qa 2>/dev/null | grep -iE '^(fcitx|ibus|openbangla|avro)' ;;
+    apk)    apk info 2>/dev/null | grep -iE '^(fcitx|ibus|openbangla|avro)' ;;
+  esac || true
 
   printf '\nInput-method processes:\n'
   ps -eo pid,comm,args | awk '$2 ~ /^(fcitx5|ibus-daemon|openbangla)/ {print}' || true
@@ -111,11 +243,13 @@ audit() {
   printf '\nRelevant environment:\n'
   env | sort | awk -F= '$1 ~ /^(GTK_IM_MODULE|QT_IM_MODULE|QT_IM_MODULES|XMODIFIERS|INPUT_METHOD|SDL_IM_MODULE|GLFW_IM_MODULE|ELECTRON_OZONE_PLATFORM_HINT)$/ {print}' || true
 
-  printf '\nExisting F12/input-method references:\n'
-  rg -n -i 'F12|fcitx|ibus|openbangla|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS' \
-    "$HOME/.config/hypr" "$HOME/.config/fcitx5" "$HOME/.config/environment.d" \
-    "$HOME/.profile" "$HOME/.xprofile" "$HOME/.zprofile" "$HOME/.pam_environment" \
-    2>/dev/null || true
+  if command -v rg >/dev/null 2>&1; then
+    printf '\nExisting input-method references:\n'
+    rg -n -i 'fcitx|ibus|openbangla|GTK_IM_MODULE|QT_IM_MODULE|XMODIFIERS' \
+      "$HOME/.config/hypr" "$HOME/.config/fcitx5" "$HOME/.config/environment.d" \
+      "$HOME/.profile" "$HOME/.xprofile" "$HOME/.zprofile" "$HOME/.pam_environment" \
+      2>/dev/null || true
+  fi
 }
 
 audit
@@ -126,27 +260,69 @@ elif (($#)); then
   die "Usage: $SCRIPT_NAME [--audit]"
 fi
 
-log "Installing the Fcitx5 frontend modules and configuration tool"
-omarchy pkg add fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool noto-fonts
+log "Installing the Fcitx5 frontend stack ($PKG_MANAGER)"
+log "(If any install below fails with 'not found', refresh your package manager's cache first -- e.g. sudo apt-get update / sudo dnf makecache / sudo zypper refresh -- and re-run.)"
+# shellcheck disable=SC2086
+pkg_install ${FCITX5_RUNTIME_PKGS[$PKG_MANAGER]}
 
 log "Removing conflicting IBus/OpenBangla packages, if present"
-conflicting_packages=(
-  ibus ibus-avro ibus-avro-git
-  ibus-openbangla ibus-openbangla-git
-  openbangla-keyboard openbangla-keyboard-bin openbangla-keyboard-git
-  fcitx5-openbangla-git
-)
-installed_conflicts=()
-for package in "${conflicting_packages[@]}"; do
-  pacman -Q "$package" >/dev/null 2>&1 && installed_conflicts+=("$package")
-done
-if ((${#installed_conflicts[@]})); then
-  omarchy pkg drop "${installed_conflicts[@]}"
+# shellcheck disable=SC2086
+pkg_remove ${CONFLICTING_PKGS[$PKG_MANAGER]}
+
+USE_AUR_FASTPATH=false
+if [[ "$PKG_MANAGER" == "pacman" ]] && command -v omarchy >/dev/null 2>&1 && command -v yay >/dev/null 2>&1; then
+  USE_AUR_FASTPATH=true
 fi
 
-command -v yay >/dev/null || die "The Fcitx5 OpenBangla engine requires yay/AUR access."
-log "Installing OpenBangla's native Fcitx5 engine"
-omarchy pkg aur add openbangla-keyboard-fcitx-git
+if $USE_AUR_FASTPATH; then
+  log "Installing OpenBangla's native Fcitx5 engine (AUR fast path)"
+  omarchy pkg aur add openbangla-keyboard-fcitx-git
+else
+  log "Building OpenBangla's native Fcitx5 engine from source"
+  if ! { command -v rustc >/dev/null 2>&1 && command -v cargo >/dev/null 2>&1 && command -v cmake >/dev/null 2>&1; }; then
+    log "Installing build dependencies ($PKG_MANAGER)"
+    # shellcheck disable=SC2086
+    pkg_install ${OPENBANGLA_BUILD_DEP_PKGS[$PKG_MANAGER]}
+  fi
+
+  build_root="$(mktemp -d)"
+  trap 'rm -rf "$build_root"' EXIT
+
+  log "Cloning https://github.com/OpenBangla/OpenBangla-keyboard (develop branch)"
+  git clone --recursive --depth 1 --branch develop \
+    https://github.com/OpenBangla/OpenBangla-keyboard.git "$build_root/openbangla"
+
+  log "Building the Riti (Rust) input engine"
+  (
+    cd "$build_root/openbangla/src/engine/riti"
+    rust_target="$(rustc -vV | sed -n 's/^host: //p')"
+    cargo build --release --target "$rust_target"
+    rm -rf release
+    cp -r "target/$rust_target/release" ./release
+  )
+
+  # CMake's own Rust integration isn't needed since Riti is already built
+  # above (mirrors the AUR package's approach).
+  sed -i '0,/enable_language(Rust)/{s/^\(\s*\)enable_language(Rust)/\1# enable_language(Rust)/}' \
+    "$build_root/openbangla/CMakeLists.txt"
+
+  log "Configuring and building with CMake"
+  mkdir -p "$build_root/openbangla/build"
+  (
+    cd "$build_root/openbangla/build"
+    # Install prefix matches the distro's own Fcitx5 (/usr), so the addon
+    # ends up in the same lib/fcitx5 directory Fcitx5 already searches.
+    cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr \
+      -DENABLE_FCITX=ON -DENABLE_IBUS=OFF
+    rm -rf src/engine/riti
+    mkdir -p src/engine
+    cp -r "$build_root/openbangla/src/engine/riti" src/engine/
+    make -j"$(nproc)"
+  )
+
+  log "Installing OpenBangla (requires $SUDO)"
+  $SUDO make -C "$build_root/openbangla/build" install
+fi
 
 descriptor=""
 for candidate in \
@@ -169,24 +345,37 @@ files_to_change=(
   "$HOME/.config/gtk-3.0/settings.ini"
   "$HOME/.config/gtk-4.0/settings.ini"
   "$HOME/.config/hypr/bindings.lua"
+  "$HOME/.profile"
+  "$HOME/.xprofile"
   "$HOME/.config/chromium-flags.conf"
   "$HOME/.config/brave-flags.conf"
   "$HOME/.config/brave-origin-beta-flags.conf"
   "$HOME/.config/chrome-flags.conf"
   "$HOME/.config/code-flags.conf"
   "$HOME/.config/electron-flags.conf"
+  "$HOME/.config/autostart/fcitx5.desktop"
   "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
   "$HOME/.config/ibus"
 )
 for file in "${files_to_change[@]}"; do backup_file "$file"; done
 printf 'Backups: %s\n' "$BACKUP_ROOT"
 
+HAS_SYSTEMD=false
+[[ -d /run/systemd/system ]] && HAS_SYSTEMD=true
+
 log "Disabling IBus state and autostart conflicts"
-while read -r unit _; do
-  [[ -n "$unit" ]] || continue
-  systemctl --user disable --now "$unit" >/dev/null 2>&1 || true
-done < <(systemctl --user list-unit-files --no-legend 2>/dev/null | awk 'tolower($1) ~ /ibus/ {print}')
+if $HAS_SYSTEMD; then
+  while read -r unit _; do
+    [[ -n "$unit" ]] || continue
+    systemctl --user disable --now "$unit" >/dev/null 2>&1 || true
+  done < <(systemctl --user list-unit-files --no-legend 2>/dev/null | awk 'tolower($1) ~ /ibus/ {print}')
+  # A previous run of an older version of this script used an Omarchy-
+  # specific systemd unit; the autostart entry below replaces it.
+  systemctl --user list-unit-files --no-legend 2>/dev/null | grep -q '^omarchy-fcitx5\.service' \
+    && systemctl --user disable --now omarchy-fcitx5.service >/dev/null 2>&1 || true
+fi
 pkill -x ibus-daemon 2>/dev/null || true
+rm -f "$HOME/.config/autostart/"ibus*.desktop 2>/dev/null || true
 
 # The stale bus files can advertise obsolete IBus addresses. Keep them in the
 # timestamped backup, then move the live directory aside instead of deleting it.
@@ -194,27 +383,25 @@ if [[ -d "$HOME/.config/ibus" ]]; then
   mv -- "$HOME/.config/ibus" "$HOME/.config/ibus.disabled.$TIMESTAMP"
 fi
 
-# Omarchy supervises Fcitx5 with a graphical-session systemd unit. Hide the
-# generic XDG autostart entry so a second unsupervised instance cannot race it.
-write_file "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop" <<'EOF'
+log "Registering Fcitx5 to start automatically (XDG autostart)"
+# Plain XDG autostart works everywhere: systemd turns it into a supervised
+# transient unit (xdg-desktop-autostart), and GNOME/KDE/XFCE/most session
+# managers process it directly even without systemd.
+rm -f "$HOME/.config/autostart/org.fcitx.Fcitx5.desktop"
+write_file "$HOME/.config/autostart/fcitx5.desktop" <<'EOF'
 [Desktop Entry]
 Type=Application
-Name=Fcitx 5 (managed by Omarchy systemd service)
-Hidden=true
+Name=Fcitx5
+Comment=Input method framework, providing OpenBangla/Avro Phonetic Bangla input
+Exec=fcitx5 --disable notificationitem
+Icon=fcitx
+Terminal=false
+Categories=System;Utility;
+X-GNOME-Autostart-enabled=true
 EOF
 
-# English and OpenBangla are added to the input method group further down,
-# once Fcitx5 is actually running (see "Configuring the input method group"
-# below). Fcitx5 owns ~/.config/fcitx5/profile as live, running-daemon state:
-# a hand-written profile that renames/repopulates the group is silently
-# discarded and rewritten back to a bare "keyboard-us"-only default the next
-# time Fcitx5 starts, because the group's identity isn't only tracked by that
-# file's text. The group must instead be configured through Fcitx5's own
-# org.fcitx.Fcitx.Controller1 D-Bus interface (the same one fcitx5-configtool
-# uses), which is what actually persists.
-
-# F12 is handled by Hyprland below, which makes the switch truly global. Empty
-# Fcitx trigger keys prevent the same keystroke from toggling twice in clients.
+# F12/hotkey trigger keys are cleared below; the toggle is driven externally
+# (Hyprland binding or your own DE shortcut running `fcitx5-remote -t`).
 write_file "$HOME/.config/fcitx5/config" <<'EOF'
 [Hotkey]
 EnumerateWithTriggerKeys=False
@@ -270,22 +457,48 @@ ShowPreeditForPassword=False
 AutoSavePeriod=30
 EOF
 
+# The English/OpenBangla input method group itself is configured further
+# down, once Fcitx5 is actually running (see "Configuring the input method
+# group" below): Fcitx5 owns ~/.config/fcitx5/profile as live daemon state,
+# and a hand-written profile that repopulates the group gets silently
+# discarded and rewritten back to a bare "keyboard-us"-only default the next
+# time Fcitx5 starts. The group must be configured through Fcitx5's own
+# org.fcitx.Fcitx.Controller1 D-Bus interface (the same one fcitx5-configtool
+# uses), which is what actually persists.
+
 log "Configuring login environment for Wayland, XWayland, Qt, SDL, and kitty"
-# GTK_IM_MODULE is intentionally left unset here (not set to an empty value):
-# systemd's environment.d parser (systemd 261+) rejects a bare `KEY=` with no
-# right-hand side as invalid syntax and drops the whole line, so an explicit
-# empty assignment silently accomplishes nothing anyway. Leaving it unset lets
-# native GTK3/4 use Wayland text-input-v3; gtk-3.0/gtk-4.0 settings below
-# still select Fcitx for X11/XWayland.
-write_file "$HOME/.config/environment.d/90-openbangla-fcitx5.conf" <<'EOF'
-INPUT_METHOD=fcitx
-QT_IM_MODULE=fcitx
-XMODIFIERS=@im=fcitx
-SDL_IM_MODULE=fcitx
-# kitty's X11 IME frontend speaks the IBus protocol; Fcitx5 provides that
-# protocol itself. This does not start or require ibus-daemon.
-GLFW_IM_MODULE=ibus
-EOF
+env_vars=(
+  "INPUT_METHOD=fcitx"
+  "QT_IM_MODULE=fcitx"
+  "XMODIFIERS=@im=fcitx"
+  "SDL_IM_MODULE=fcitx"
+  "GLFW_IM_MODULE=ibus"
+)
+if $HAS_SYSTEMD; then
+  # GTK_IM_MODULE is intentionally left unset (not set to an empty value):
+  # systemd's environment.d parser (systemd 261+) rejects a bare `KEY=` with
+  # no right-hand side as invalid syntax and drops the whole line, so an
+  # explicit empty assignment silently accomplishes nothing anyway. Leaving
+  # it unset lets native GTK3/4 use Wayland text-input-v3; gtk-3.0/gtk-4.0
+  # settings below still select Fcitx for X11/XWayland.
+  {
+    for v in "${env_vars[@]}"; do printf '%s\n' "$v"; done
+    printf '%s\n' '# kitty'"'"'s X11 IME frontend speaks the IBus protocol; Fcitx5 provides that'
+    printf '%s\n' '# protocol itself. This does not start or require ibus-daemon.'
+  } | write_file "$HOME/.config/environment.d/90-openbangla-fcitx5.conf"
+  systemctl --user daemon-reload 2>/dev/null || true
+else
+  # No systemd user manager to process environment.d: fall back to shell
+  # profile files, which display managers and X11 sessions read at login.
+  for profile_file in "$HOME/.profile" "$HOME/.xprofile"; do
+    remove_managed_block "$profile_file" "$MANAGED_BEGIN_SH" "$MANAGED_END_SH"
+    {
+      printf '\n%s\n' "$MANAGED_BEGIN_SH"
+      for v in "${env_vars[@]}"; do printf 'export %s\n' "$v"; done
+      printf '%s\n' "$MANAGED_END_SH"
+    } >> "$profile_file"
+  done
+fi
 
 set_ini_key "$HOME/.config/gtk-3.0/settings.ini" Settings gtk-im-module fcitx
 set_ini_key "$HOME/.config/gtk-4.0/settings.ini" Settings gtk-im-module fcitx
@@ -307,41 +520,84 @@ for file in "$HOME/.config/code-flags.conf" "$HOME/.config/electron-flags.conf";
   append_flag "$file" --enable-wayland-ime
 done
 
-log "Binding CTRL + SPACE globally without replacing other Omarchy/Hyprland settings"
-bindings_file="$HOME/.config/hypr/bindings.lua"
-mkdir -p "${bindings_file%/*}"
-touch "$bindings_file"
-remove_managed_lua_block "$bindings_file"
-{
-  printf '\n%s\n' "$MANAGED_BEGIN"
-  printf '%s\n' '# CTRL + SPACE is not bound by Omarchy'"'"'s defaults (only SUPER+SPACE and'
-  printf '%s\n' '# other SUPER-combos are). Keep the explicit unbind so a future Omarchy'
-  printf '%s\n' '# default cannot shadow this global toggle.'
-  printf '%s\n' 'hl.unbind("CTRL + SPACE")'
-  printf '%s\n' 'o.bind("CTRL + SPACE", "Toggle English/Bangla input", "fcitx5-remote -t")'
-  printf '%s\n' "$MANAGED_END"
-} >> "$bindings_file"
-
-log "Enabling Omarchy's supervised Fcitx5 service"
-systemctl --user daemon-reload
-systemctl --user enable omarchy-fcitx5.service
-systemctl --user restart omarchy-fcitx5.service
-
-log "Reloading and validating Hyprland"
-hyprctl reload
-config_errors="$(hyprctl configerrors 2>&1 || true)"
-printf '%s\n' "$config_errors"
-if [[ -n "${config_errors//[[:space:]]/}" && "$config_errors" != *"no errors"* ]]; then
-  die "Hyprland reported configuration errors. Restore from $BACKUP_ROOT before logging out."
+HAS_OMARCHY_HYPR=false
+if command -v omarchy >/dev/null 2>&1 && command -v hyprctl >/dev/null 2>&1 && [[ -d "$HOME/.config/hypr" ]]; then
+  HAS_OMARCHY_HYPR=true
 fi
 
-log "Verifying packages, engine, daemon, and English/Bangla state transitions"
-for package in fcitx5 fcitx5-gtk fcitx5-qt fcitx5-configtool openbangla-keyboard-fcitx-git; do
-  pacman -Q "$package" >/dev/null || die "Required package missing: $package"
-done
+if $HAS_OMARCHY_HYPR; then
+  log "Binding CTRL + SPACE globally (Omarchy/Hyprland)"
+  bindings_file="$HOME/.config/hypr/bindings.lua"
+  mkdir -p "${bindings_file%/*}"
+  touch "$bindings_file"
+  remove_managed_block "$bindings_file" "$MANAGED_BEGIN_LUA" "$MANAGED_END_LUA"
+  {
+    printf '\n%s\n' "$MANAGED_BEGIN_LUA"
+    printf '%s\n' '-- CTRL + SPACE is not bound by Omarchy'"'"'s defaults (only SUPER+SPACE and'
+    printf '%s\n' '-- other SUPER-combos are). Keep the explicit unbind so a future Omarchy'
+    printf '%s\n' '-- default cannot shadow this global toggle.'
+    printf '%s\n' 'hl.unbind("CTRL + SPACE")'
+    printf '%s\n' 'o.bind("CTRL + SPACE", "Toggle English/Bangla input", "fcitx5-remote -t")'
+    printf '%s\n' "$MANAGED_END_LUA"
+  } >> "$bindings_file"
 
-systemctl --user is-enabled --quiet omarchy-fcitx5.service || die "Fcitx5 service is not enabled."
-systemctl --user is-active --quiet omarchy-fcitx5.service || die "Fcitx5 service is not running."
+  log "Reloading and validating Hyprland"
+  hyprctl reload
+  config_errors="$(hyprctl configerrors 2>&1 || true)"
+  printf '%s\n' "$config_errors"
+  if [[ -n "${config_errors//[[:space:]]/}" && "$config_errors" != *"no errors"* ]]; then
+    die "Hyprland reported configuration errors. Restore from $BACKUP_ROOT before logging out."
+  fi
+else
+  log "No Omarchy/Hyprland setup detected -- bind the toggle yourself"
+  cat <<'EOF'
+This script only wires up a global CTRL+SPACE toggle automatically on
+Omarchy/Hyprland. On your desktop, bind this command to a key yourself:
+
+    fcitx5-remote -t
+
+Quick examples:
+
+  GNOME (Settings -> Keyboard -> custom shortcuts, or via gsettings):
+    gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings \
+      "['/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/']"
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ name 'Toggle Bangla input'
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ command 'fcitx5-remote -t'
+    gsettings set org.gnome.settings-daemon.plugins.media-keys.custom-keybinding:/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings/custom0/ binding '<Control>space'
+
+  KDE Plasma: System Settings -> Shortcuts -> Custom Shortcuts -> new
+  command action, command "fcitx5-remote -t", key Ctrl+Space.
+
+  sway/i3: add to your config:
+    bindsym Control+space exec fcitx5-remote -t
+EOF
+fi
+
+log "Starting Fcitx5 and waiting for it on D-Bus"
+pkill -x fcitx5 2>/dev/null || true
+sleep 0.3
+setsid -f fcitx5 --disable notificationitem >/dev/null 2>&1 &
+disown
+
+fcitx_running=false
+for _ in $(seq 1 20); do
+  owner="$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+    --method org.freedesktop.DBus.NameHasOwner org.fcitx.Fcitx5 2>/dev/null || true)"
+  [[ "$owner" == "(true,)" ]] && { fcitx_running=true; break; }
+  sleep 0.5
+done
+$fcitx_running || die "Fcitx5 did not start (no org.fcitx.Fcitx5 D-Bus name appeared)."
+
+log "Verifying the OpenBangla install"
+if $USE_AUR_FASTPATH; then
+  pkg_is_installed openbangla-keyboard-fcitx-git || die "Required package missing: openbangla-keyboard-fcitx-git"
+fi
+addon_found=false
+for lib in /usr/lib/fcitx5/openbangla.so /usr/lib64/fcitx5/openbangla.so \
+  /usr/local/lib/fcitx5/openbangla.so /usr/local/lib64/fcitx5/openbangla.so; do
+  [[ -f "$lib" ]] && { addon_found=true; break; }
+done
+$addon_found || die "OpenBangla's Fcitx5 addon library was not found after install."
 
 log "Configuring English and OpenBangla (Avro Phonetic) as the only input pair"
 readonly FCITX_IFACE="org.fcitx.Fcitx.Controller1"
@@ -366,13 +622,18 @@ current_im="$(fcitx5-remote -n)"
 fcitx5-remote -t
 [[ "$(fcitx5-remote)" == "1" ]] || die "Fcitx5 did not return to English/inactive state."
 
-for package in "${conflicting_packages[@]}"; do
-  pacman -Q "$package" >/dev/null 2>&1 && die "A conflicting package is still installed: $package"
+# shellcheck disable=SC2086
+for pkg in ${CONFLICTING_PKGS[$PKG_MANAGER]}; do
+  pkg_is_installed "$pkg" && die "A conflicting package is still installed: $pkg"
 done
 pgrep -x ibus-daemon >/dev/null 2>&1 && die "ibus-daemon is still running."
 
 printf '\nSetup complete.\n'
 printf 'Backups: %s\n' "$BACKUP_ROOT"
-printf 'Final state: English (F12 switches to OpenBangla/Avro; F12 switches back).\n'
+if $HAS_OMARCHY_HYPR; then
+  printf 'Final state: English (Ctrl+Space switches to OpenBangla/Avro; Ctrl+Space switches back).\n'
+else
+  printf 'Final state: English (run `fcitx5-remote -t` to switch to OpenBangla/Avro, or bind it to a key -- see instructions above).\n'
+fi
 printf 'Log out and back in once so every already-running application inherits the corrected environment.\n'
-printf 'After login, fully restart Firefox, Chromium/Brave/Chrome, VS Code, Electron apps, and terminals before testing.\n'
+printf 'After login, fully restart your browser, editors, and terminals before testing.\n'
