@@ -1,0 +1,156 @@
+# Mikasa Glass — coordinated frosted surfaces for Omarchy Quickshell.
+# Alpha values are intentionally balanced for readability on anime wallpapers.
+
+[bar]
+background = "#1B1719"
+background-alpha = 0.78
+text = "#ECE6E4"
+active = "#E0525F"
+scale-with-font = true
+size-horizontal = 28
+size-vertical = 30
+
+[hyprland]
+active-border = "rgba(E0525FEE) rgba(C9A6B4EE) 45deg"
+active-border-foreground = "rgba(ECE6E4EE) rgba(E0525FEE) 45deg"
+
+[controls]
+normal-color = "#ECE6E4"
+normal-fill-alpha = 0.05
+normal-border = "#E0525F"
+normal-border-width = 1
+normal-border-alpha = 0.20
+hover-cursor-color = "#E0525F"
+hover-cursor-fill-alpha = 0.12
+hover-cursor-border = "#E0525F"
+hover-cursor-border-width = 1
+hover-cursor-border-alpha = 0.48
+focus-color = "#E0525F"
+focus-fill-alpha = 0.16
+focus-border = "#E0525F"
+focus-border-width = 1
+focus-border-alpha = 0.82
+selected-color = "#ECE6E4"
+selected-fill-alpha = 0.14
+selected-border = "#C9A6B4"
+selected-border-width = 1
+selected-border-alpha = 0.45
+pressed-color = "#C9A6B4"
+pressed-fill-alpha = 0.20
+selection-color = "#E0525F"
+selection-fill-alpha = 0.32
+
+[spacing]
+scale = 1.0
+scale-with-font = true
+panel-padding = 14
+popup-padding = 12
+row-gap = 8
+panel-gap = 10
+
+[font]
+base-size = 12
+caption = 10
+body-small = 11
+body = 12
+subtitle = 13
+title = 14
+heading = 16
+display = 24
+display-large = 28
+icon-small = 11
+icon = 14
+icon-large = 18
+
+[popups]
+background = "#1B1719"
+background-alpha = 0.84
+text = "#ECE6E4"
+border = "hyprland.active-border"
+border-alpha = 0.72
+border-width = 1
+
+[tooltip]
+background = "#121012"
+background-alpha = 0.90
+text = "#ECE6E4"
+border = "#E0525F"
+border-alpha = 0.48
+border-width = 1
+
+[notifications]
+background = "#1B1719"
+background-alpha = 0.86
+text = "#ECE6E4"
+border = "hyprland.active-border"
+border-alpha = 0.72
+border-width = 1
+countdown = "#E0525F"
+
+[launcher]
+background = "#1B1719"
+background-alpha = 0.88
+text = "#B8AFB0"
+border = "hyprland.active-border"
+border-alpha = 0.78
+border-width = 1
+scrim = "#0B0909"
+scrim-alpha = 0.42
+selected-background = "#E0525F"
+selected-background-alpha = 0.18
+selected-text = "#F5F0EE"
+selected-border = "#E0525F"
+selected-border-alpha = 0.65
+selected-border-width = 1
+
+[menu]
+background = "#1B1719"
+background-alpha = 0.84
+text = "#B8AFB0"
+border = "hyprland.active-border"
+border-alpha = 0.76
+border-width = 1
+scrim = "#0B0909"
+scrim-alpha = 0.38
+selected-background = "#E0525F"
+selected-background-alpha = 0.16
+selected-text = "#F5F0EE"
+selected-border = "#E0525F"
+selected-border-alpha = 0.58
+selected-border-width = 1
+
+[polkit]
+background = "#1B1719"
+background-alpha = 0.92
+text = "#ECE6E4"
+text-error = "#FF7B86"
+border = "hyprland.active-border"
+border-error = "#FF7B86"
+border-alpha = 0.88
+border-width = 1
+scrim = "#0B0909"
+scrim-alpha = 0.52
+accent = "#E0525F"
+
+[lock]
+background = "#121012"
+background-alpha = 0.76
+text = "#ECE6E4"
+placeholder = "#B8AFB0"
+text-error = "#FF7B86"
+border = "hyprland.active-border"
+border-active = "hyprland.active-border"
+border-error = "#FF7B86"
+border-alpha = 0.90
+border-width = 1
+selection = "#E0525F"
+selection-alpha = 0.34
+
+[image-picker]
+scrim = "#0B0909"
+scrim-alpha = 0.46
+text = "#ECE6E4"
+selected-border = "#E0525F"
+selected-border-alpha = 0.92
+unselected-border = "#8A7F84"
+unselected-border-alpha = 0.52

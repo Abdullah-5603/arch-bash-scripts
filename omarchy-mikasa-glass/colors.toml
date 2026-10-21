@@ -1,0 +1,40 @@
+# Mikasa Glass — crimson scarf over dark steel, fixed palette for Omarchy 4
+# A coordinated palette; these values do not change automatically per wallpaper.
+mode = "dark"
+
+accent = "#E0525F"
+selection = "#4A2A32"
+selection_background = "#4A2A32"
+selection_foreground = "#ECE6E4"
+muted = "#8A7F84"
+
+# Tinted neutral surfaces help maintain readable text over colorful wallpapers.
+background = "#1B1719"
+dark_background = "#121012"
+darker_background = "#0B0909"
+lighter_background = "#2B2427"
+
+foreground = "#ECE6E4"
+dark_foreground = "#B8AFB0"
+light_foreground = "#F5F0EE"
+bright_foreground = "#FFFFFF"
+
+red = "#D6404F"
+yellow = "#E8C27A"
+orange = "#E39A63"
+green = "#6FA36B"
+cyan = "#7FB5B0"
+blue = "#7FA3C7"
+magenta = "#C9A6B4"
+brown = "#A8795A"
+
+bright_red = "#FF6674"
+bright_yellow = "#F5D99B"
+bright_green = "#8CC488"
+bright_cyan = "#A3D4CF"
+bright_blue = "#A1C1DE"
+bright_magenta = "#DDBFCB"
+
+# Status colors: one shade of red for danger, one shade of green for success.
+danger = "#D6404F"
+success = "#6FA36B"
