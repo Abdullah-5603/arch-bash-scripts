@@ -4,6 +4,8 @@ mode = "dark"
 
 accent = "#8BCDD8"
 selection = "#334B61"
+selection_background = "#334B61"
+selection_foreground = "#F4F0F8"
 muted = "#71879A"
 
 # Tinted neutral surfaces help maintain readable text over colorful wallpapers.
@@ -17,18 +19,22 @@ dark_foreground = "#B4BDCE"
 light_foreground = "#F7F4FC"
 bright_foreground = "#FFFFFF"
 
-red = "#F28B9D"
+red = "#E5535B"
 yellow = "#F6D28A"
 orange = "#F3AD8B"
-green = "#A8D8B5"
+green = "#4FBF7A"
 cyan = "#8BCDD8"
 blue = "#8CB8F4"
 magenta = "#D8A7ED"
 brown = "#C79A7A"
 
-bright_red = "#FF9EAD"
+bright_red = "#FF6B73"
 bright_yellow = "#FFE3A5"
-bright_green = "#C1EBCB"
+bright_green = "#6FD895"
 bright_cyan = "#A9E6EE"
 bright_blue = "#A9CCFF"
 bright_magenta = "#E8C0F8"
+
+# Status colors: one shade of red for danger, one shade of green for success.
+danger = "#E5535B"
+success = "#4FBF7A"
