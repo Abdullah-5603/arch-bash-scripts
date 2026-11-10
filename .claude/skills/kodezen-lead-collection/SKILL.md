@@ -31,7 +31,10 @@ Goal: find small local businesses whose website looks very bad (old or ugly, bas
 
 ## 1. Hard rules learned (user corrections)
 - The user wants sites that look **very bad** visually. Good, polished, modern designs are rejected, even if WordPress. A moderately plain site is NOT enough.
-- Best leads: bad look + basic functionality + **not responsive**. Platform does not matter (WordPress, Wix, Duda, custom all OK). WordPress is a bonus only.
+- Best leads: bad look + basic functionality + **not responsive**.
+- **Platform rule: collect WordPress sites only.** Detect with `wp-content` / `wp-includes` in the HTML, `meta generator` "WordPress", `link[rel="https://api.w.org/"]`, or a WP theme such as Divi/Elementor. Skip Wix, Duda, Squarespace, GoDaddy, Weebly, Webflow, Shopify and custom/static sites.
+- **Exception:** a non-WordPress site may be collected only when it is extremely bad: very ugly and clearly broken visually (for example not responsive and clashing, unreadable, cropped, outdated). Mention the exception in the final report and write the reason in Notes (for example "Not WordPress (Wix) - kept as exception: extremely bad, breaks on phone"). Do not use the exception for sites that are merely plain or mediocre.
+- Screen WordPress FIRST (cheap JS check), then run the responsive test and the visual review.
 - Check the **full site visually** (home, 2-3 inner pages, contact form), not just the first screen.
 - Never write "not found / not linked / none" in the Social Link column. List only real links.
 - Every link in a cell must be a full `https://...` URL and the whole URL must be one clickable link (see section 5).
@@ -98,7 +101,7 @@ Rules that avoided bugs:
 ## 6. Content of each lead
 - **Business Name / Website name**: as on Maps and the domain only.
 - **Email / Phone**: only what is publicly listed. Put both when available. If none: `Email: not listed on the site` is acceptable here (this is a contact field, not social).
-- **Technology**: Wix, Duda, WordPress (theme), Squarespace, custom. Add "fixed ~980 px layout, not responsive" when true.
+- **Technology**: WordPress (theme and version when visible, for example "WordPress (Divi 4.25)"). For an exception lead write the real platform (Wix, Duda, Squarespace, custom) plus "exception: extremely bad". Add "fixed ~980 px layout, not responsive" when true.
 - **Social Link**: real links only, each a full URL: Facebook, Instagram, Houzz, BBB, LinkedIn, WhatsApp, Google Maps search URL with `(4.9 stars, 46 reviews)`.
 - **Website Problem**: 6-9 specific, verified bullets. Always include responsive findings (390 px and 820 px), contact/form problems, missing gallery, alt text count.
 - **Your offer**: bullets per Kodezen product with the reason it fits (ECM portfolio, GemBoards project tracking, aBlocks clean sections, GemBooking for estimates), one `Offer:` line and one `Why it fits:` line. Do not pitch a booking tool if they already have online scheduling.
@@ -113,3 +116,5 @@ Rules that avoided bugs:
 
 ## 8. Reject list examples (do not re-check)
 Polished modern sites are rejected even if WordPress (Haus of Blaylock, Landry Designs, Salvation Home Remodeling, Make Ready Home, Darnell Green). Non-responsive but huge (North Texas Contracting) or premium looking (Lee's Remodeling) were kept only as backups.
+
+Earlier session leads were collected BEFORE the WordPress-only rule, so most of them are Wix/Duda (Luxury Home Remodeling DFW, Lone Star Home Remodeling Pros, Distinguished Custom Homes, Aurora Remodeling LLC); only ACRECO is WordPress (Divi). Do not duplicate them. They may be replaced later if the user asks.
